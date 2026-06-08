@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to Image Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --container-bg: rgba(255, 255, 255, 0.03);
+            --text-color: #e0e0e0;
+            --accent-color: #5c7cfa;
+            --border-radius: 12px;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--container-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-sizing: border-box;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            margin-top: 0;
+            font-weight: 500;
+            letter-spacing: 1px;
+            font-size: 1.2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 15px;
+        }
+
+        .upload-area {
+            margin: 20px 0;
+            padding: 30px;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: var(--border-radius);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-color);
+            background: rgba(92, 124, 250, 0.05);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: opacity 0.2s;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+        }
+
+        .output-item {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #000;
+            padding: 15px;
+            border-radius: var(--border-radius);
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .download-link {
+            margin-top: 15px;
+            color: var(--accent-color);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .download-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>PDF to Image Tool</h2>
+        <div class="upload-area">
+            <label for="pdf-upload" class="btn">选择本地 PDF 文件</label>
+            <input type="file" id="pdf-upload" accept="application/pdf">
+            <p style="font-size: 0.8rem; color: #888; margin-top: 15px;">纯客户端处理，不上传任何数据</p>
+        </div>
+        
+        <div id="status" style="color: #888; font-size: 0.9rem; text-align: center;"></div>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        // 配置 pdf.js 的 worker 路径
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        document.getElementById('pdf-upload').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file || file.type !== 'application/pdf') {
+                alert('数据类型错误：请选择有效的 PDF 文件。');
+                return;
+            }
+
+            const outputDiv = document.getElementById('output');
+            const statusDiv = document.getElementById('status');
+            outputDiv.innerHTML = ''; 
+            statusDiv.textContent = '解析文件流...';
+
+            const fileReader = new FileReader();
+            
+            fileReader.onload = async function() {
+                const typedarray = new Uint8Array(this.result);
+                
+                try {
+                    statusDiv.textContent = '加载 PDF 结构...';
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    statusDiv.textContent = `共发现 ${pdf.numPages} 页，开始渲染...`;
+
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        
+                        // 设置渲染缩放比例，2.0 通常可以获得较高的图像清晰度
+                        const scale = 2.0; 
+                        const viewport = page.getViewport({ scale: scale });
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        const renderContext = {
+                            canvasContext: context,
+                            viewport: viewport
+                        };
+
+                        await page.render(renderContext).promise;
+                        
+                        // 生成 Base64 图片数据
+                        const imgDataUrl = canvas.toDataURL('image/png');
+                        
+                        // 构建 DOM
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'output-item';
+                        
+                        const img = document.createElement('img');
+                        img.src = imgDataUrl;
+                        
+                        const link = document.createElement('a');
+                        link.href = imgDataUrl;
+                        link.download = `${file.name.replace('.pdf', '')}_page_${pageNum}.png`;
+                        link.className = 'download-link';
+                        link.textContent = `⬇ 下载第 ${pageNum} 页 PNG`;
+
+                        itemDiv.appendChild(img);
+                        itemDiv.appendChild(link);
+                        outputDiv.appendChild(itemDiv);
+                    }
+                    statusDiv.textContent = '渲染完成。';
+                } catch (error) {
+                    console.error('PDF 处理失败:', error);
+                    statusDiv.textContent = '渲染失败，请检查控制台日志。';
+                }
+            };
+            
+            // 将文件作为 ArrayBuffer 读取，符合 pdf.js API 规范
+            fileReader.readAsArrayBuffer(file);
+        });
+    </script>
+</body>
+</html>
