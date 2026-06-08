@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF & Image Processing Toolkit</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --container-bg: rgba(255, 255, 255, 0.03);
+            --text-color: #e0e0e0;
+            --accent-color: #5c7cfa;
+            --border-radius: 12px;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--container-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-sizing: border-box;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            color: var(--accent-color);
+            border-bottom-color: var(--accent-color);
+        }
+
+        .module {
+            display: none;
+        }
+
+        .module.active {
+            display: block;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        select {
+            background: #1a1a1a;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+
+        .upload-area {
+            padding: 30px;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: var(--border-radius);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-color);
+            background: rgba(92, 124, 250, 0.05);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: opacity 0.2s;
+            display: inline-block;
+            border: none;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+        }
+
+        #status-p2i, #status-i2p {
+            color: #888;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 15px;
+            min-height: 20px;
+        }
+
+        .output-item {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #000;
+            padding: 15px;
+            border-radius: var(--border-radius);
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .download-link {
+            margin-top: 15px;
+            color: var(--accent-color);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('pdf-to-img-mod')">PDF 转图片</div>
+            <div class="tab" onclick="switchTab('img-to-pdf-mod')">图片 转 PDF</div>
+        </div>
+
+        <div id="pdf-to-img-mod" class="module active">
+            <div class="control-group">
+                <label for="resolution-select">输出分辨率配置：</label>
+                <select id="resolution-select">
+                    <option value="1.0">标准 (72 DPI, 适合屏幕预览)</option>
+                    <option value="2.0" selected>清晰 (144 DPI, 推荐配置)</option>
+                    <option value="3.0">超清 (216 DPI, 适合局部放大)</option>
+                    <option value="4.0">原画 (288 DPI, 适合打印级输出)</option>
+                </select>
+            </div>
+            
+            <div class="upload-area">
+                <label for="pdf-upload" class="btn">选择 PDF 文件进行转换</label>
+                <input type="file" id="pdf-upload" accept="application/pdf">
+            </div>
+            <div id="status-p2i"></div>
+            <div id="output-p2i"></div>
+        </div>
+
+        <div id="img-to-pdf-mod" class="module">
+            <div class="control-group">
+                <span style="color: #bbb; font-size: 0.9rem;">逻辑说明：多张图片将按选择顺序自动合并为一份 PDF 文件，页面尺寸将自适应每张图片的原始尺寸。</span>
+            </div>
+
+            <div class="upload-area">
+                <label for="img-upload" class="btn">选择图片 (支持多选)</label>
+                <input type="file" id="img-upload" accept="image/png, image/jpeg, image/webp" multiple>
+            </div>
+            <div id="status-i2p"></div>
+        </div>
+    </div>
+
+    <script>
+        // UI 标签切换逻辑
+        function switchTab(modId) {
+            document.querySelectorAll('.module').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(modId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // ==========================================
+        // 模块 1: PDF 转图片核心逻辑
+        // ==========================================
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        document.getElementById('pdf-upload').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const scale = parseFloat(document.getElementById('resolution-select').value);
+            const outputDiv = document.getElementById('output-p2i');
+            const statusDiv = document.getElementById('status-p2i');
+            
+            outputDiv.innerHTML = ''; 
+            statusDiv.textContent = '解析文件流中...';
+
+            const fileReader = new FileReader();
+            fileReader.onload = async function() {
+                try {
+                    const typedarray = new Uint8Array(this.result);
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    statusDiv.textContent = `计算布局... 共 ${pdf.numPages} 页，渲染缩放比: ${scale}x`;
+
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: scale });
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        await page.render({ canvasContext: context, viewport: viewport }).promise;
+                        
+                        const imgDataUrl = canvas.toDataURL('image/png');
+                        
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'output-item';
+                        
+                        const img = document.createElement('img');
+                        img.src = imgDataUrl;
+                        
+                        const link = document.createElement('a');
+                        link.href = imgDataUrl;
+                        link.download = `${file.name.replace('.pdf', '')}_p${pageNum}_${scale}x.png`;
+                        link.className = 'download-link';
+                        link.textContent = `⬇ 保存第 ${pageNum} 页 (PNG)`;
+
+                        itemDiv.appendChild(img);
+                        itemDiv.appendChild(link);
+                        outputDiv.appendChild(itemDiv);
+                    }
+                    statusDiv.textContent = '全部页面渲染完成。';
+                } catch (error) {
+                    console.error(error);
+                    statusDiv.textContent = '执行出错，检查控制台日志。';
+                }
+            };
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        // ==========================================
+        // 模块 2: 图片转 PDF 核心逻辑
+        // ==========================================
+        document.getElementById('img-upload').addEventListener('change', async function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+
+            const statusDiv = document.getElementById('status-i2p');
+            statusDiv.textContent = `开始处理 ${files.length} 个文件...`;
+
+            try {
+                const { jsPDF } = window.jspdf;
+                let pdf = null;
+
+                // 辅助函数：将文件转换为 Image 对象以提取宽高像素
+                const loadImage = (file) => {
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => resolve({ img: img, data: e.target.result, width: img.naturalWidth, height: img.naturalHeight });
+                            img.onerror = reject;
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                };
+
+                // 按选择顺序串行处理图像
+                for (let i = 0; i < files.length; i++) {
+                    statusDiv.textContent = `处理文件 ${i + 1}/${files.length}...`;
+                    const imgData = await loadImage(files[i]);
+                    
+                    // 将像素(px)转换为 jsPDF 默认的毫米(mm)，假定标准的 96 DPI 换算
+                    // 以保持 PDF 页面尺寸与图片比例严格一致（1px ≈ 0.264583mm）
+                    const widthMm = imgData.width * 0.264583;
+                    const heightMm = imgData.height * 0.264583;
+
+                    if (i === 0) {
+                        // 初始化文档，第一页使用第一张图片的尺寸
+                        pdf = new jsPDF({
+                            orientation: widthMm > heightMm ? 'landscape' : 'portrait',
+                            unit: 'mm',
+                            format: [widthMm, heightMm]
+                        });
+                    } else {
+                        // 添加新页面，使用当前图片的尺寸
+                        pdf.addPage([widthMm, heightMm], widthMm > heightMm ? 'landscape' : 'portrait');
+                    }
+
+                    // 写入图像数据流
+                    pdf.addImage(imgData.data, 'JPEG', 0, 0, widthMm, heightMm);
+                }
+
+                statusDiv.textContent = '数据聚合完成，触发下载...';
+                pdf.save(`Images_Merged_${Date.now()}.pdf`);
+                statusDiv.textContent = '合并 PDF 已下载完成。';
+
+            } catch (error) {
+                console.error(error);
+                statusDiv.textContent = '生成 PDF 时发生内部错误。';
+            }
+        });
+    </script>
+</body>
+</html>
